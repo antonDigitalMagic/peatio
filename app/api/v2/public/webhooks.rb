@@ -6,42 +6,18 @@ module API
       class Webhooks < Grape::API
         helpers ::API::V2::WebhooksHelpers
 
-        desc 'Bitgo Webhook'
+        desc 'Webhook controller'
         params do
+          requires :adapter,
+                   type: String,
+                   desc: 'Name of adapter for process webhook'
           requires :event,
                    type: String,
                    desc: 'Name of event can be deposit or withdraw',
                    values: { value: -> { %w[deposit withdraw] }, message: 'public.webhook.invalid_event' }
-          requires :type,
-                   type: String,
-                   desc: 'Type of event.'
-          given type: ->(val) { val == 'transfer' } do
-            requires :hash,
-                     type: String,
-                     desc: 'Transfer txid.'
-            requires :transfer,
-                     type: String,
-                     desc: 'Transfer id.'
-            requires :coin,
-                     type: String,
-                     desc: 'Currency code.'
-            requires :wallet,
-                     type: String,
-                     desc: 'Wallet id.'
-          end
-          given type: ->(val) { val == 'address_confirmation' } do
-            requires :hash,
-                     type: String,
-                     desc: 'Address txid.'
-            requires :address,
-                     type: String,
-                     desc: 'User Address.'
-            requires :walletId,
-                     type: String,
-                     desc: 'Wallet id.'
-          end
         end
-        post '/webhooks/:event' do
+        # e.g. /webhooks/bitgo/deposit
+        post '/webhooks/:adapter/:event' do
           proces_webhook_event(params)
           status 200
         rescue StandardError => e

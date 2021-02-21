@@ -3,54 +3,49 @@
 module API
   module V2
     module WebhooksHelpers
-      def proces_webhook_event(event)
-        if params[:event] == 'deposit'
-          # For deposit events we use only Deposit wallets.
-          Wallet.where(status: :active, kind: :deposit).each do |w|
-            service = w.service
-            next unless service.adapter.respond_to?(:trigger_webhook_event)
+      def process_webhook_event(payload)
+        if payload[:event] == 'deposit'
+          process_deposit_event(payload)
+        elsif payload[:event] == 'withdraw'
+          process_withdraw_event(payload)
+        end
+      end
 
-            event = service.trigger_webhook_event(params)
-            next unless event.present?
-            accepted_deposits = []
-            ActiveRecord::Base.transaction do
-              accepted_deposits = process_deposit_event(event, params)
-            end
-            accepted_deposits.each(&:process!) if accepted_deposits.present?
+      def process_deposit_event(payload)
+        # For deposit events we use only Deposit wallets.
+        Wallet.where(status: :active, kind: :deposit, gateway: payload[:adapter]).each do |w|
+          service = w.service
+          next unless service.adapter.respond_to?(:trigger_webhook_event)
+
+          transactions = service.trigger_webhook_event(payload)
+          next unless event.present?
+          accepted_deposits = []
+          ActiveRecord::Base.transaction do
+            accepted_deposits = process_deposit(transactions)
           end
-        elsif params[:event] == 'withdraw'
-          # For withdraw events we use only Withdraw events.
-          Wallet.where(status: :active, kind: :hot).each do |w|
-            service = w.service
-            next unless service.adapter.respond_to?(:trigger_webhook_event)
+          accepted_deposits.each(&:process!) if accepted_deposits.present?
+        end
+      end
 
-            event = service.trigger_webhook_event(params)
-            next unless event.present?
+      def process_withdraw_event(payload)
+        # For withdraw events we use only Withdraw events.
+        Wallet.where(status: :active, kind: :hot, gateway: payload[:adapter]).each do |w|
+          service = w.service
+          next unless service.adapter.respond_to?(:trigger_webhook_event)
 
-            ActiveRecord::Base.transaction do
-              update_withdrawal!(event[:transfers]) if event[:transfers].present?
-            end
+          transactions = service.trigger_webhook_event(payload)
+          next unless event.present?
+
+          ActiveRecord::Base.transaction do
+            update_withdrawal(transactions) if transactions.present?
           end
         end
       end
 
-      def process_deposit_event(event, params)
-        if event[:transfers].present?
-          accepted_deposits = find_or_create_deposit!(event[:transfers])
-        elsif event[:address_id].present?
-          create_address(event[:address_id], params[:address], event[:currency_id])
-        end
+      def process_deposit(transactions)
+        accepted_deposits = find_or_create_deposit!(transactions)
 
         accepted_deposits.compact if accepted_deposits.present?
-      end
-
-      def create_address(address_id, address, currency_id)
-        Rails.logger.info { "Address detected: #{address}" }
-
-        payment_address = PaymentAddress.where(address: nil, wallet: Wallet.deposit_wallet(transaction.currency_id))
-                                        .find { |address| address.details['address_id'] == address_id }
-
-        payment_address.update!(address: address) if payment_address.present?
       end
 
       def find_or_create_deposit!(transactions)
@@ -77,8 +72,17 @@ module API
         end
       end
 
-      def update_withdrawal!(transactions)
+      def update_withdrawal(transactions)
         transactions.each do |transaction|
+          if transaction.options[:tid].present?
+            withdraw = WithdrawLimit::Coin.find_by(tid: transaction.options[:tid])
+            if withdraw.present? && withdraw.txid.blank?
+              withdraw.txid = transaction.hash
+              withdraw.dispatch
+              withdraw.save!
+            end
+          end
+
           withdrawal = Withdraws::Coin.confirming
                                       .find_by(currency_id: transaction.currency_id, txid: transaction.hash)
 
