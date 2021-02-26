@@ -56,6 +56,24 @@ module OpendaxCloud
       raise Peatio::Wallet::ClientError, e
     end
 
+    def trigger_webhook_event(payload)
+      payload = JSON.parse(payload).with_indifferent_access
+
+      Peatio::Transaction.new(
+        currency_id: payload[:currency],
+        amount: payload[:amount],
+        hash: payload[:blockchain_txid],
+        to_address: payload[:rid],
+        txout: 0,
+        status: payload[:state],
+        options: {
+          tid: payload[:tid]
+        }
+      )
+    rescue OpendaxCloud::Client::Error => e
+      raise Peatio::Wallet::ClientError, e
+    end
+
     def currency_id
       @currency.fetch(:id)
     end
