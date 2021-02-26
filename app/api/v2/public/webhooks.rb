@@ -18,7 +18,7 @@ module API
         end
         # e.g. /webhooks/bitgo/deposit
         post '/webhooks/:adapter/:event' do
-          proces_webhook_event(params)
+          process_webhook_event(params, request.headers)
           status 200
         rescue StandardError => e
           Rails.logger.warn { "Cannot perform webhook: #{params}. Error: #{e}." }

@@ -63,13 +63,23 @@ module OpendaxCloud
         currency_id: payload[:currency],
         amount: payload[:amount],
         hash: payload[:blockchain_txid],
-        to_address: payload[:rid],
+        to_address: payload[:rid] || payload[:address], # if there is no rid field, it means we have deposit
         txout: 0,
         status: payload[:state],
         options: {
           tid: payload[:tid]
         }
       )
+    rescue OpendaxCloud::Client::Error => e
+      raise Peatio::Wallet::ClientError, e
+    end
+
+    def check_authorization_headers(headers)
+      if headers['Authorization']
+        token = headers['Authorization'].split(' ').last
+
+        JWT.decode(token, ENV['OPENFINEX_CLOUD_PUBLIC_KEY'], true, { algorithm: 'RS256' })
+      end
     rescue OpendaxCloud::Client::Error => e
       raise Peatio::Wallet::ClientError, e
     end

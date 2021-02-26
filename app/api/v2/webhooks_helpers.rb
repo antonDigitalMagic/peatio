@@ -3,21 +3,26 @@
 module API
   module V2
     module WebhooksHelpers
-      def process_webhook_event(payload)
+      def process_webhook_event(payload, headers)
         if payload[:event] == 'deposit'
-          process_deposit_event(payload)
+          process_deposit_event(payload, headers)
         elsif payload[:event] == 'withdraw'
-          process_withdraw_event(payload)
+          process_withdraw_event(payload, headers)
         end
       end
 
-      def process_deposit_event(payload)
+      def process_deposit_event(payload, headers)
         # For deposit events we use only Deposit wallets.
         Wallet.where(status: :active, kind: :deposit, gateway: payload[:adapter]).each do |w|
           service = w.service
           next unless service.adapter.respond_to?(:trigger_webhook_event)
 
           transactions = service.trigger_webhook_event(payload)
+
+          if service.adapter.respond_to?(:check_authorization_headers)
+            service.check_authorization_headers(headers)
+          end
+
           next unless event.present?
           accepted_deposits = []
           ActiveRecord::Base.transaction do
@@ -27,7 +32,7 @@ module API
         end
       end
 
-      def process_withdraw_event(payload)
+      def process_withdraw_event(payload, headers)
         # For withdraw events we use only Withdraw events.
         Wallet.where(status: :active, kind: :hot, gateway: payload[:adapter]).each do |w|
           service = w.service
@@ -35,6 +40,10 @@ module API
 
           transactions = service.trigger_webhook_event(payload)
           next unless event.present?
+
+          if service.adapter.respond_to?(:check_authorization_headers)
+            service.check_authorization_headers(headers)
+          end
 
           ActiveRecord::Base.transaction do
             update_withdrawal(transactions) if transactions.present?
