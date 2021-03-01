@@ -56,32 +56,29 @@ module OpendaxCloud
       raise Peatio::Wallet::ClientError, e
     end
 
-    def trigger_webhook_event(payload)
-      payload = JSON.parse(payload).with_indifferent_access
+    def trigger_webhook_event(request)
+      public_key = OpenSSL::PKey.read(Base64.urlsafe_decode64(ENV.fetch('OPENFINEX_CLOUD_PUBLIC_KEY')))
+      params = JWT.decode(request.body.string, public_key, true, { algorithm: 'RS256' }).first.with_indifferent_access
 
-      Peatio::Transaction.new(
-        currency_id: payload[:currency],
-        amount: payload[:amount],
-        hash: payload[:blockchain_txid],
-        to_address: payload[:rid] || payload[:address], # if there is no rid field, it means we have deposit
-        txout: 0,
-        status: payload[:state],
-        options: {
-          tid: payload[:tid]
-        }
-      )
+      [
+        Peatio::Transaction.new(
+          currency_id: params[:currency],
+          amount: params[:amount], # TODO convert from base unit or not?
+          hash: params[:blockchain_txid],
+          # If there is no rid field, it means we have deposit
+          to_address: params[:rid] || params[:address],
+          txout: 0,
+          status: params[:state],
+          options: {
+            tid: params[:tid]
+          })
+      ]
     rescue OpendaxCloud::Client::Error => e
       raise Peatio::Wallet::ClientError, e
     end
 
-    def check_authorization_headers(headers)
-      if headers['Authorization']
-        token = headers['Authorization'].split(' ').last
-
-        JWT.decode(token, ENV['OPENFINEX_CLOUD_PUBLIC_KEY'], true, { algorithm: 'RS256' })
-      end
-    rescue OpendaxCloud::Client::Error => e
-      raise Peatio::Wallet::ClientError, e
+    def convert_from_base_unit(value, currency)
+      value.to_d / currency.fetch(:base_factor).to_d
     end
 
     def currency_id

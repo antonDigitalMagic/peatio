@@ -183,4 +183,46 @@ describe OpendaxCloud::Wallet do
       end
     end
   end
+
+  context :trigger_webhook_event do
+    let(:rsa_private) { OpenSSL::PKey::RSA.generate 2048 }
+
+    let(:payload) {
+      {
+        currency: 'eth',
+        amount: '2323',
+        blockchain_txid: 'c37ae1677c4c989dbde9ac22be1f3ff3ac67ed24732a9fa8c9258fdff0232d72',
+        state: 'succeed',
+        tid: '0x6d6cabaa7232d7f45b143b445114f7e92350a2aa'
+      }
+    }
+
+    let(:jwt_token) { JWT.encode(payload, rsa_private, 'RS256') }
+
+    context 'successful response' do
+      before do
+        ENV['OPENFINEX_CLOUD_PUBLIC_KEY'] = Base64.urlsafe_encode64(rsa_private.public_key.to_pem)
+      end
+
+      it 'returns transactions' do
+        res = wallet.trigger_webhook_event(OpenStruct.new('body': StringIO.new(jwt_token)))
+
+        expect(res[0].amount).to eq payload[:amount]
+        expect(res[0].currency_id).to eq payload[:currency]
+        expect(res[0].hash).to eq payload[:blockchain_txid]
+        expect(res[0].status).to eq payload[:state]
+        expect(res[0].options[:tid]).to eq payload[:tid]
+      end
+    end
+
+    context 'successful response' do
+      before do
+        ENV['OPENFINEX_CLOUD_PUBLIC_KEY'] = Base64.urlsafe_encode64(OpenSSL::PKey::RSA.generate(2048).to_pem)
+      end
+
+      it 'returns error' do
+        expect { wallet.trigger_webhook_event(OpenStruct.new('body': StringIO.new(jwt_token))) }.to raise_error(JWT::VerificationError)
+      end
+    end
+  end
 end
