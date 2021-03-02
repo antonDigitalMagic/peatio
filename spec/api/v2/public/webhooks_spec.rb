@@ -6,19 +6,12 @@ describe API::V2::Public::Webhooks, type: :request do
 
     context 'deposit' do
       context 'deposit wallet doesnt exist' do
-        let(:params) do
-          {
-            adapter: 'opendax_cloud',
-            event: 'deposit'
-          }
-        end
-
         it do
           expect {
             api_post '/api/v2/public/webhooks/opendax_cloud/deposit'
           }.not_to change { Deposit.count }
 
-          expect(Wallet.where(status: :active, kind: :deposit, gateway: params[:adapter]).count).to eq 0
+          expect(Wallet.where(status: :active, kind: :deposit, gateway: 'opendax_cloud').count).to eq 0
         end
       end
 
@@ -26,13 +19,6 @@ describe API::V2::Public::Webhooks, type: :request do
         let!(:deposit_wallet) { create(:wallet, :eth_opendax_cloud_deposit) }
 
         context 'transactions doesnt exist' do
-          let(:params) do
-            {
-              adapter: 'opendax_cloud',
-              event: 'deposit'
-            }
-          end
-
           before do
             WalletService.any_instance.stubs(:trigger_webhook_event).returns([])
           end
@@ -45,13 +31,6 @@ describe API::V2::Public::Webhooks, type: :request do
         end
 
         context 'there is no JWT' do
-          let(:params) do
-            {
-              adapter: 'opendax_cloud',
-              event: 'deposit'
-            }
-          end
-
           it do
             api_post '/api/v2/public/webhooks/opendax_cloud/deposit'
 
@@ -74,13 +53,6 @@ describe API::V2::Public::Webhooks, type: :request do
           end
 
           context 'accepted deposits exist' do
-            let(:params) do
-              {
-                adapter: 'opendax_cloud',
-                event: 'deposit'
-              }
-            end
-
             before do
               WalletService.any_instance.stubs(:trigger_webhook_event).returns([transaction])
             end
@@ -124,13 +96,6 @@ describe API::V2::Public::Webhooks, type: :request do
               )
             end
 
-            let(:params) do
-              {
-                adapter: 'opendax_cloud',
-                event: 'deposit'
-              }
-            end
-
             before do
               # disable first deposit wallet for eth to have ability to use opendax cloud deposit wallet
               Wallet.deposit_wallet(transaction.currency_id).update(status: 'disabled')
@@ -155,19 +120,12 @@ describe API::V2::Public::Webhooks, type: :request do
 
     context 'withdraw' do
       context 'hot wallet doesnt exist' do
-        let(:params) do
-          {
-            adapter: 'opendax_cloud',
-            event: 'withdraw'
-          }
-        end
-
         it do
           expect {
             api_post '/api/v2/public/webhooks/opendax_cloud/withdraw'
           }.not_to change { Withdraw.count }
 
-          expect(Wallet.where(status: :active, kind: :hot, gateway: params[:adapter]).count).to eq 0
+          expect(Wallet.where(status: :active, kind: :hot, gateway: 'opendax_cloud').count).to eq 0
         end
       end
 
@@ -175,13 +133,6 @@ describe API::V2::Public::Webhooks, type: :request do
         let!(:hot_wallet) { create(:wallet, :eth_opendax_cloud_hot) }
 
         context 'transactions doesnt exist' do
-          let(:params) do
-            {
-              adapter: 'opendax_cloud',
-              event: 'withdraw'
-            }
-          end
-
           before do
             WalletService.any_instance.stubs(:trigger_webhook_event).returns([])
           end
@@ -257,6 +208,59 @@ describe API::V2::Public::Webhooks, type: :request do
                 expect(withdraw.aasm_state).to eq 'failed'
               end
             end
+          end
+        end
+      end
+    end
+
+    context 'deposit address' do
+      context 'deposit wallet doesnt exist' do
+        it do
+          api_post '/api/v2/public/webhooks/opendax_cloud/deposit_address'
+          expect(response.status).to eq 200
+
+          expect(Wallet.where(status: :active, kind: :deposit, gateway: 'opendax_cloud').count).to eq 0
+        end
+      end
+
+      context 'deposit wallet exists' do
+        let!(:deposit_wallet) { create(:wallet, :eth_opendax_cloud_deposit) }
+
+        context 'event doesnt exist' do
+          before do
+            WalletService.any_instance.stubs(:trigger_webhook_event).returns([])
+          end
+
+          it do
+            api_post '/api/v2/public/webhooks/opendax_cloud/deposit_address'
+            expect(response.status).to eq 200
+          end
+        end
+
+        context 'event exists' do
+          let(:event) do
+            {
+              address: 'Address',
+              currency_id: 'eth',
+              details: {
+                address_id: 12
+              }
+            }
+          end
+
+          before do
+            # disable first deposit wallet for eth to have ability to use opendax cloud deposit wallet
+            Wallet.deposit_wallet('eth').update(status: 'disabled')
+            WalletService.any_instance.stubs(:trigger_webhook_event).returns(event)
+          end
+
+          let!(:payment_address) { PaymentAddress.create(member: member, wallet: deposit_wallet, address: nil, details: { address_id: 12}) }
+
+          it do
+            api_post '/api/v2/public/webhooks/opendax_cloud/deposit_address'
+            expect(response.status).to eq 200
+            payment_address.reload
+            expect(payment_address.address).to eq event[:address].downcase
           end
         end
       end

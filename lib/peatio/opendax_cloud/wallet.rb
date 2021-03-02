@@ -3,6 +3,19 @@ module OpendaxCloud
     Error = Class.new(StandardError)
     DEFAULT_FEATURES = { skip_deposit_collection: true }.freeze
 
+    DEPOSIT_TRANSACTION_STATE_TRANSLATIONS = {
+      success: %w[collected],
+      rejected: %w[rejected],
+      pending: %w[processing accepted aml_processing aml_suspicious fee_processing]
+    }.freeze
+
+    WITHDRAW_TRANSACTION_STATE_TRANSLATIONS = {
+      success: %w[succeed],
+      failed: %w[failed],
+      rejected: %w[rejected],
+      pending: %w[accepted processing confirming errored]
+    }.freeze
+
     def initialize(custom_features = {})
       @features = DEFAULT_FEATURES.merge(custom_features).slice(*SUPPORTED_FEATURES)
       @settings = {}
@@ -57,7 +70,9 @@ module OpendaxCloud
     end
 
     def trigger_webhook_event(request)
+      # Decode from base64 openfinex_cloud env
       public_key = OpenSSL::PKey.read(Base64.urlsafe_decode64(ENV.fetch('OPENFINEX_CLOUD_PUBLIC_KEY')))
+      # Verify JWT signature
       params = JWT.decode(request.body.string, public_key, true, { algorithm: 'ES256' }).first.with_indifferent_access
 
       event = request.params[:event]
@@ -71,13 +86,24 @@ module OpendaxCloud
           # If there is no rid field, it means we have deposit in payload
           to_address: params[:rid] || params[:address],
           txout: 0,
-          status: params[:state],
+          status: translate_state(event, params[:state]),
           options: {
             tid: params[:tid]
           })
       ]
     rescue OpendaxCloud::Client::Error => e
       raise Peatio::Wallet::ClientError, e
+    end
+
+    # This method will translate deposit/withdraw states
+    # to transaction states (rejected, success, penging, rejected)
+    def translate_state(event, state)
+      # Get transaction state translation which depends on event
+      states = OpendaxCloud::Wallet.const_get("#{event.upcase}_TRANSACTION_STATE_TRANSLATIONS")
+      res = states.find { |key, values| values.include?(state) }
+
+      # result consists of array [key, [values]]
+      res.first if res.present?
     end
 
     def convert_from_base_unit(value)

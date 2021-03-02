@@ -8,6 +8,22 @@ module API
           process_deposit_event(request)
         elsif request.params[:event] == 'withdraw'
           process_withdraw_event(request)
+        elsif request.params[:event] == 'deposit_address'
+          process_deposit_address_event(request)
+        end
+      end
+
+      def process_deposit_address_event(request)
+        # For deposit address events we use only Deposit wallets.
+        Wallet.where(status: :active, kind: :deposit, gateway: request.params[:adapter]).each do |w|
+          service = w.service
+
+          next unless service.adapter.respond_to?(:trigger_webhook_event)
+          event = service.trigger_webhook_event(request)
+
+          next unless event.present?
+
+          create_address(event[:details], event[:address], event[:currency_id])
         end
       end
 
@@ -20,6 +36,7 @@ module API
           transactions = service.trigger_webhook_event(request)
 
           next unless transactions.present?
+
           accepted_deposits = []
           ActiveRecord::Base.transaction do
             accepted_deposits = process_deposit(transactions)
@@ -109,6 +126,18 @@ module API
             withdrawal.success!
           end
         end
+      end
+
+      # This method will update payment address by specific detail value
+      def create_address(details, address, currency_id)
+        Rails.logger.info { "Address detected: #{address}" }
+
+        key_name = details.keys.first.to_s
+        key_value = details.values.first
+        payment_address = PaymentAddress.where(address: nil, wallet: Wallet.deposit_wallet(currency_id))
+                                        .find { |address| address.details[key_name] == key_value }
+
+        payment_address.update!(address: address) if payment_address.present?
       end
     end
   end

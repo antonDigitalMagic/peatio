@@ -231,7 +231,7 @@ describe OpendaxCloud::Wallet do
           expect(res[0].amount).to eq 1.0
           expect(res[0].currency_id).to eq payload[:currency]
           expect(res[0].hash).to eq payload[:blockchain_txid]
-          expect(res[0].status).to eq payload[:state]
+          expect(res[0].status).to eq 'pending'
           expect(res[0].options[:tid]).to eq payload[:tid]
         end
       end
@@ -243,7 +243,7 @@ describe OpendaxCloud::Wallet do
           expect(res[0].amount).to eq payload[:amount].to_d
           expect(res[0].currency_id).to eq payload[:currency]
           expect(res[0].hash).to eq payload[:blockchain_txid]
-          expect(res[0].status).to eq payload[:state]
+          expect(res[0].status).to eq 'success'
           expect(res[0].options[:tid]).to eq payload[:tid]
         end
       end
