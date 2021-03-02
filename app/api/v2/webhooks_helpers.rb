@@ -56,6 +56,15 @@ module API
           next if payment_address.blank?
 
           Rails.logger.info { "Deposit transaction detected: #{transaction.inspect}" }
+
+          if transaction.options.present? && transaction.options[:tid].present?
+            deposit = Deposits::Coin.find_by(tid: transaction.options[:tid])
+            if deposit.present? && deposit.txid.blank?
+              deposit.txid = transaction.hash
+              deposit.save!
+            end
+          end
+
           deposit =
             Deposits::Coin.find_or_create_by!(
               currency_id: transaction.currency_id,

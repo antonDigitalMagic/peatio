@@ -185,43 +185,77 @@ describe OpendaxCloud::Wallet do
   end
 
   context :trigger_webhook_event do
-    let(:rsa_private) { OpenSSL::PKey::RSA.generate 2048 }
+    let(:rsa_private) { OpenSSL::PKey::EC.generate('prime256v1') }
 
     let(:payload) {
       {
         currency: 'eth',
-        amount: '2323',
+        amount: '1000000000000000000',
         blockchain_txid: 'c37ae1677c4c989dbde9ac22be1f3ff3ac67ed24732a9fa8c9258fdff0232d72',
         state: 'succeed',
         tid: '0x6d6cabaa7232d7f45b143b445114f7e92350a2aa'
       }
     }
 
-    let(:jwt_token) { JWT.encode(payload, rsa_private, 'RS256') }
+    let(:eth) do
+      Currency.find_by(id: :eth)
+    end
+
+    let(:uri) { 'http://127.0.0.1:8000' }
+
+    let(:settings) do
+      {
+        wallet:
+          { address:     'something',
+            uri:         uri
+          },
+        currency: eth.to_blockchain_api_settings
+      }
+    end
+
+    before do
+      wallet.configure(settings)
+    end
+
+    let(:jwt_token) { JWT.encode(payload, rsa_private, 'ES256') }
 
     context 'successful response' do
       before do
-        ENV['OPENFINEX_CLOUD_PUBLIC_KEY'] = Base64.urlsafe_encode64(rsa_private.public_key.to_pem)
+        ENV['OPENFINEX_CLOUD_PUBLIC_KEY'] = Base64.urlsafe_encode64(OpenSSL::PKey::EC.new(rsa_private).to_pem)
       end
 
-      it 'returns transactions' do
-        res = wallet.trigger_webhook_event(OpenStruct.new('body': StringIO.new(jwt_token)))
+      context 'deposit' do
+        it 'returns transactions' do
+          res = wallet.trigger_webhook_event(OpenStruct.new({'body': StringIO.new(jwt_token), 'params': {'event': 'deposit'}}))
 
-        expect(res[0].amount).to eq payload[:amount]
-        expect(res[0].currency_id).to eq payload[:currency]
-        expect(res[0].hash).to eq payload[:blockchain_txid]
-        expect(res[0].status).to eq payload[:state]
-        expect(res[0].options[:tid]).to eq payload[:tid]
+          expect(res[0].amount).to eq 1.0
+          expect(res[0].currency_id).to eq payload[:currency]
+          expect(res[0].hash).to eq payload[:blockchain_txid]
+          expect(res[0].status).to eq payload[:state]
+          expect(res[0].options[:tid]).to eq payload[:tid]
+        end
+      end
+
+      context 'withdraw' do
+        it 'returns transactions' do
+          res = wallet.trigger_webhook_event(OpenStruct.new({'body': StringIO.new(jwt_token), 'params': {'event': 'withdraw'}}))
+
+          expect(res[0].amount).to eq payload[:amount].to_d
+          expect(res[0].currency_id).to eq payload[:currency]
+          expect(res[0].hash).to eq payload[:blockchain_txid]
+          expect(res[0].status).to eq payload[:state]
+          expect(res[0].options[:tid]).to eq payload[:tid]
+        end
       end
     end
 
     context 'successful response' do
       before do
-        ENV['OPENFINEX_CLOUD_PUBLIC_KEY'] = Base64.urlsafe_encode64(OpenSSL::PKey::RSA.generate(2048).to_pem)
+        ENV['OPENFINEX_CLOUD_PUBLIC_KEY'] = Base64.urlsafe_encode64(OpenSSL::PKey::EC.generate('prime256v1').to_pem)
       end
 
       it 'returns error' do
-        expect { wallet.trigger_webhook_event(OpenStruct.new('body': StringIO.new(jwt_token))) }.to raise_error(JWT::VerificationError)
+        expect { wallet.trigger_webhook_event(OpenStruct.new({'body': StringIO.new(jwt_token), 'params': {'event': 'deposit'} })) }.to raise_error(JWT::VerificationError)
       end
     end
   end

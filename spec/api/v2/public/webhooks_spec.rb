@@ -107,6 +107,48 @@ describe API::V2::Public::Webhooks, type: :request do
               end
             end
           end
+
+          context 'with options' do
+            let(:transaction) do
+              Peatio::Transaction.new(
+                currency_id: :eth,
+                hash: '0xa049b0202ba078caa723c6b59594247b0c9f33e24878950f8537cedff9ea20ac',
+                amount: 0.5,
+                to_address: '0x1ef338196bd0207ba4852ba7a6847eed59331b84',
+                block_number: 16880960,
+                txout: 0,
+                status: :success,
+                options: {
+                  tid: 'TID9493F6CD41',
+                }
+              )
+            end
+
+            let(:params) do
+              {
+                adapter: 'opendax_cloud',
+                event: 'deposit'
+              }
+            end
+
+            before do
+              # disable first deposit wallet for eth to have ability to use opendax cloud deposit wallet
+              Wallet.deposit_wallet(transaction.currency_id).update(status: 'disabled')
+              PaymentAddress.create(member: member, wallet: deposit_wallet, address: '0x1ef338196bd0207ba4852ba7a6847eed59331b84')
+              WalletService.any_instance.stubs(:trigger_webhook_event).returns([transaction])
+            end
+
+            let!(:deposit) { create(:deposit, :deposit_eth, tid: 'TID9493F6CD41', txid: nil)}
+
+            it do
+              expect {
+                api_post '/api/v2/public/webhooks/opendax_cloud/deposit'
+              }.not_to change { Deposit.count }
+              deposit.reload
+              expect(deposit.tid).to eq 'TID9493F6CD41'
+              expect(deposit.txid).to eq '0xa049b0202ba078caa723c6b59594247b0c9f33e24878950f8537cedff9ea20ac'
+            end
+          end
         end
       end
     end

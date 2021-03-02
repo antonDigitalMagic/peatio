@@ -58,14 +58,17 @@ module OpendaxCloud
 
     def trigger_webhook_event(request)
       public_key = OpenSSL::PKey.read(Base64.urlsafe_decode64(ENV.fetch('OPENFINEX_CLOUD_PUBLIC_KEY')))
-      params = JWT.decode(request.body.string, public_key, true, { algorithm: 'RS256' }).first.with_indifferent_access
+      params = JWT.decode(request.body.string, public_key, true, { algorithm: 'ES256' }).first.with_indifferent_access
+
+      event = request.params[:event]
+      amount = event == 'deposit' ? convert_from_base_unit(params[:amount]) : params[:amount].to_d
 
       [
         Peatio::Transaction.new(
           currency_id: params[:currency],
-          amount: params[:amount], # TODO convert from base unit or not?
+          amount: amount,
           hash: params[:blockchain_txid],
-          # If there is no rid field, it means we have deposit
+          # If there is no rid field, it means we have deposit in payload
           to_address: params[:rid] || params[:address],
           txout: 0,
           status: params[:state],
@@ -77,8 +80,8 @@ module OpendaxCloud
       raise Peatio::Wallet::ClientError, e
     end
 
-    def convert_from_base_unit(value, currency)
-      value.to_d / currency.fetch(:base_factor).to_d
+    def convert_from_base_unit(value)
+      value.to_d / @currency.fetch(:base_factor).to_d
     end
 
     def currency_id
