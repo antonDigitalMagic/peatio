@@ -14,6 +14,10 @@ module API
           optional :market,
                    values: { value: ->(v) { (Array.wrap(v) - ::Market.active.pluck(:symbol)).blank? }, message: 'market.market.doesnt_exist' },
                    desc: -> { V2::Entities::Market.documentation[:symbol] }
+          optional :market_type,
+                   values: { value: -> { ::Market::TYPES }, message: 'market.market.invalid_market_type' },
+                   desc: -> { V2::Entities::Market.documentation[:type] },
+                   default: 'spot'
           use :trade_filters
         end
         get '/trades' do
@@ -22,6 +26,7 @@ module API
           current_user
             .trades
             .order(order_param)
+            .tap { |q| q.where!(market_type: params[:market_type]) }
             .tap { |q| q.where!(market: params[:market]) if params[:market] }
             .tap { |q| q.where!('created_at >= ?', Time.at(params[:time_from])) if params[:time_from] }
             .tap { |q| q.where!('created_at < ?', Time.at(params[:time_to])) if params[:time_to] }

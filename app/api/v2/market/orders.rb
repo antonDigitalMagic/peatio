@@ -11,9 +11,14 @@ module API
           is_array: true,
           success: API::V2::Entities::Order
         params do
+          # Would be cool to validate market based on the market_type
           optional :market,
-                   values: { value: ->(v) { (Array.wrap(v) - ::Market.spot.active.pluck(:symbol)).blank? }, message: 'market.market.doesnt_exist' },
+                   values: { value: ->(v) { (Array.wrap(v) - ::Market.active.pluck(:symbol)).blank? }, message: 'market.market.doesnt_exist' },
                    desc: -> { V2::Entities::Market.documentation[:symbol] }
+          optional :market_type,
+                   values: { value: -> { ::Market::TYPES }, message: 'market.market.invalid_market_type' },
+                   desc: -> { V2::Entities::Market.documentation[:type] },
+                   default: 'spot'
           optional :base_unit,
                    type: String,
                    values: { value: -> { ::Market.spot.active.pluck(:base_unit) }, message: 'market.market.doesnt_exist' },
@@ -63,6 +68,7 @@ module API
           user_authorize! :read, ::Order
 
           current_user.orders.order(updated_at: params[:order_by])
+                      .tap { |q| q.where!(market_type: params[:market_type]) }
                       .tap { |q| q.where!(market: params[:market]) if params[:market] }
                       .tap { |q| q.where!(ask: params[:base_unit]) if params[:base_unit] }
                       .tap { |q| q.where!(bid: params[:quote_unit]) if params[:quote_unit] }
@@ -116,9 +122,9 @@ module API
 
           begin
             if params[:id].match?(/\A[0-9]+\z/)
-              order = current_user.orders.find_by!(id: params[:id])
+              order = current_user.orders.spot.find_by!(id: params[:id])
             elsif UUID.validate(params[:id])
-              order = current_user.orders.find_by!(uuid: params[:id])
+              order = current_user.orders.spot.find_by!(uuid: params[:id])
             else
               error!({ errors: ['market.order.invaild_id_or_uuid'] }, 422)
             end
@@ -149,6 +155,7 @@ module API
 
           begin
             orders = current_user.orders
+                                 .spot
                                  .with_state(:wait)
                                  .tap { |q| q.where!(market: params[:market]) if params[:market] }
             if params[:side].present?

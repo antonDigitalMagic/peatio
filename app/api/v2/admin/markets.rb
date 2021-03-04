@@ -86,11 +86,15 @@ module API
           requires :id,
                    type: String,
                    desc: -> { API::V2::Admin::Entities::Market.documentation[:id][:desc] }
+          optional :type,
+                   type: { value: String, message: 'admin.market.non_string_market_type' },
+                     values: { value: -> { ::Market::TYPES }, message: 'admin.market.invalid_market_type' },
+                   default: 'spot'
         end
         get '/markets/:id', requirements: { id: /[\w\.\-]+/ } do
           admin_authorize! :read, ::Market
 
-          present ::Market.find_spot_by_symbol(params[:id]), with: API::V2::Admin::Entities::Market
+          present ::Market.find_by_symbol_and_type(params[:id], params[:type]), with: API::V2::Admin::Entities::Market
         end
 
         desc 'Create new market.' do
@@ -149,7 +153,8 @@ module API
                    desc: -> { API::V2::Admin::Entities::Market.documentation[:id][:desc] }
           optional :type,
                    type: { value: String, message: 'admin.market.non_string_market_type' },
-                   values: { value: -> { ::Market::TYPES }, message: 'admin.market.invalid_market_type' }
+                   values: { value: -> { ::Market::TYPES }, message: 'admin.market.invalid_market_type' },
+                   default: 'spot'
           optional :engine_id,
                    type: { value: Integer, message: 'admin.market.non_integer_engine_id' },
                    desc: -> { API::V2::Admin::Entities::Market.documentation[:engine_id][:desc] }
@@ -170,7 +175,7 @@ module API
         post '/markets/update' do
           admin_authorize! :update, ::Market
 
-          market = ::Market.find_spot_by_symbol(params[:id])
+          market = ::Market.find_by_symbol_and_type(params[:id], params[:type])
           if market.update(declared(params, include_missing: false))
             present market, with: API::V2::Admin::Entities::Market
           else

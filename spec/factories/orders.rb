@@ -16,6 +16,7 @@ FactoryBot.define do
       bid { :usd }
       ask { :btc }
       market { Market.find_spot_by_symbol(:btcusd) }
+      market_type { 'spot' }
       state { :wait }
       ord_type { 'limit' }
       price { '1'.to_d }
@@ -30,6 +31,7 @@ FactoryBot.define do
       bid { :usd }
       ask { :btc }
       market { Market.find_spot_by_symbol(:btcusd) }
+      market_type { 'spot' }
       state { :wait }
       ord_type { 'limit' }
       price { '1'.to_d }
@@ -44,6 +46,22 @@ FactoryBot.define do
       bid { :eth }
       ask { :btc }
       market { Market.find_spot_by_symbol(:btceth) }
+      market_type { 'spot' }
+      state { :wait }
+      ord_type { 'limit' }
+      price { '1'.to_d }
+      volume { '1'.to_d }
+      origin_volume { volume.to_d }
+      locked { price.to_d *  volume.to_d }
+      origin_locked { locked.to_d }
+      member { create(:member) }
+    end
+
+    trait :btceth_qe do
+      bid { :eth }
+      ask { :btc }
+      market { Market.find_qe_by_symbol(:btceth) }
+      market_type { 'qe' }
       state { :wait }
       ord_type { 'limit' }
       price { '1'.to_d }
@@ -69,6 +87,7 @@ FactoryBot.define do
       bid { :usd }
       ask { :btc }
       market { Market.find_spot_by_symbol(:btcusd) }
+      market_type { 'spot' }
       state { :wait }
       ord_type { 'limit' }
       price { '1'.to_d }
@@ -83,6 +102,7 @@ FactoryBot.define do
       bid { :usd }
       ask { :btc }
       market { Market.find_spot_by_symbol(:btcusd) }
+      market_type { 'spot' }
       state { :wait }
       ord_type { 'limit' }
       price { '1'.to_d }
@@ -97,6 +117,22 @@ FactoryBot.define do
       bid { :eth }
       ask { :btc }
       market { Market.find_spot_by_symbol(:btceth) }
+      market_type { 'spot' }
+      state { :wait }
+      ord_type { 'limit' }
+      price { '1'.to_d }
+      volume { '1'.to_d }
+      origin_volume { volume.to_d }
+      locked { volume.to_d }
+      origin_locked { locked.to_d }
+      member { create(:member) }
+    end
+
+    trait :btceth_qe do
+      bid { :eth }
+      ask { :btc }
+      market { Market.find_qe_by_symbol(:btceth) }
+      market_type { 'qe' }
       state { :wait }
       ord_type { 'limit' }
       price { '1'.to_d }

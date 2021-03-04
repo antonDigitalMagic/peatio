@@ -10,7 +10,7 @@ class Trade < ApplicationRecord
 
   # == Relationships ========================================================
 
-  belongs_to :market, -> { where(type: 'spot') }, foreign_key: :market_id, primary_key: :symbol, required: true
+  belongs_to :market, ->(trade) { where(type: trade.market_type) }, foreign_key: :market_id, primary_key: :symbol, required: true
   belongs_to :maker_order, class_name: 'Order', foreign_key: :maker_order_id, required: true
   belongs_to :taker_order, class_name: 'Order', foreign_key: :taker_order_id, required: true
   belongs_to :maker, class_name: 'Member', foreign_key: :maker_id, required: true
@@ -24,6 +24,8 @@ class Trade < ApplicationRecord
 
   scope :h24, -> { where('created_at > ?', 24.hours.ago) }
   scope :with_market, ->(market) { where(market_id: market) }
+  scope :spot, -> { where(market_type: 'spot') }
+  scope :qe, -> { where(market_type: 'qe') }
 
   # == Callbacks ============================================================
 

@@ -15,8 +15,12 @@ module API
                    values: { value: ->(v) { Member.exists?(uid: v) }, message: 'management.orders.uid_doesnt_exist' },
                    desc: 'Filter order by owner uid'
           optional :market,
-                   values: { value: -> { ::Market.spot.pluck(:symbol) }, message: 'management.orders.market_doesnt_exist' },
+                   values: { value: -> { ::Market.pluck(:symbol) }, message: 'management.orders.market_doesnt_exist' },
                    desc: -> { API::V2::Management::Entities::Market.documentation[:id][:desc] }
+          optional :market_type,
+                   values: { value: -> { ::Market::TYPES }, message: 'market.market.invalid_market_type' },
+                   desc: -> {  API::V2::Management::Entities::Market.documentation[:type][:desc] },
+                   default: 'spot'
           optional :state,
                    values: { value: -> { ::Order.state.values }, message: 'management.orders.invalid_state' },
                    desc: 'Filter order by state.'
@@ -31,7 +35,7 @@ module API
           end
 
           ransack_params = API::V2::Admin::Helpers::RansackBuilder.new(params)
-                                                                  .eq(:ord_type, :state, :member_id)
+                                                                  .eq(:ord_type, :state, :member_id, :market_type)
                                                                   .translate(market: :market_id)
                                                                   .build
 
@@ -90,7 +94,7 @@ module API
 
           if market_engine.peatio_engine?
             ransack_params = API::V2::Admin::Helpers::RansackBuilder.new(params)
-                                                                    .eq(:member_id, state: 'wait')
+                                                                    .eq(:member_id, market_type: 'spot', state: 'wait')
                                                                     .translate(market: :market_id)
                                                                     .build
 

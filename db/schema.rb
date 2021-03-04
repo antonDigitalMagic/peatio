@@ -272,11 +272,12 @@ ActiveRecord::Schema.define(version: 2021_02_25_123519) do
     t.integer "trades_count", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "market_type", default: "spot", null: false
     t.index ["member_id"], name: "index_orders_on_member_id"
     t.index ["state"], name: "index_orders_on_state"
-    t.index ["type", "market_id"], name: "index_orders_on_type_and_market_id"
+    t.index ["type", "market_id", "market_type"], name: "index_orders_on_type_and_market_id_and_market_type"
     t.index ["type", "member_id"], name: "index_orders_on_type_and_member_id"
-    t.index ["type", "state", "market_id"], name: "index_orders_on_type_and_state_and_market_id"
+    t.index ["type", "state", "market_id", "market_type"], name: "index_orders_on_type_and_state_and_market_id_and_market_type"
     t.index ["type", "state", "member_id"], name: "index_orders_on_type_and_state_and_member_id"
     t.index ["updated_at"], name: "index_orders_on_updated_at"
     t.index ["uuid"], name: "index_orders_on_uuid", unique: true
@@ -358,10 +359,14 @@ ActiveRecord::Schema.define(version: 2021_02_25_123519) do
     t.string "taker_type", limit: 20, default: "", null: false
     t.datetime "created_at", precision: 3, null: false
     t.datetime "updated_at", precision: 3, null: false
+    t.string "market_type", default: "spot", null: false
     t.index ["created_at"], name: "index_trades_on_created_at"
+    t.index ["maker_id", "market_type", "created_at"], name: "index_trades_on_maker_id_and_market_type_and_created_at"
+    t.index ["maker_id", "market_type"], name: "index_trades_on_maker_id_and_market_type"
     t.index ["maker_id"], name: "index_trades_on_maker_id"
     t.index ["maker_order_id"], name: "index_trades_on_maker_order_id"
     t.index ["market_id", "created_at"], name: "index_trades_on_market_id_and_created_at"
+    t.index ["taker_id", "market_type"], name: "index_trades_on_taker_id_and_market_type"
     t.index ["taker_id"], name: "index_trades_on_taker_id"
     t.index ["taker_order_id"], name: "index_trades_on_taker_order_id"
   end

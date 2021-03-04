@@ -44,7 +44,7 @@ class Market < ApplicationRecord
 
   # == Attributes ===========================================================
 
-  attr_readonly :base_unit, :quote_unit
+  attr_readonly :base_unit, :quote_unit, :type
 
   # base_currency & quote_currency is preferred names instead of legacy
   # base_unit & quote_unit.
@@ -64,7 +64,7 @@ class Market < ApplicationRecord
   has_one :quote, class_name: 'Currency', foreign_key: :id, primary_key: :quote_unit
   belongs_to :engine, required: true
 
-  has_many :trading_fees, foreign_key: :market_id, primary_key: :symbol,  dependent: :delete_all
+  has_many :trading_fees, foreign_key: :market_id, primary_key: :symbol, dependent: :delete_all
 
   # == Validations ==========================================================
 
@@ -157,6 +157,10 @@ class Market < ApplicationRecord
 
     def find_qe_by_symbol(market_symbol)
       Market.find_by!(symbol: market_symbol, type: 'qe')
+    end
+
+    def find_by_symbol_and_type(market_symbol, market_type)
+      Market.find_by!(symbol: market_symbol, type: market_type)
     end
   end
 

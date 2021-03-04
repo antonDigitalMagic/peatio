@@ -16,6 +16,7 @@ describe API::V2::Market::Orders, type: :request do
       # NOTE: We specify updated_at attribute for testing order of Order.
       create(:order_bid, :btcusd, price: '11'.to_d, volume: '123.12345678', member: member, created_at: 1.day.ago, updated_at: Time.now + 5)
       create(:order_bid, :btceth, price: '11'.to_d, volume: '123.1234', member: member)
+      create(:order_bid, :btceth_qe, price: '11'.to_d, volume: '123.1234', member: member)
       create(:order_bid, :btcusd, price: '12'.to_d, volume: '123.12345678', created_at: 1.day.ago, member: member, state: Order::CANCEL)
       create(:order_ask, :btcusd, price: '13'.to_d, volume: '123.12345678', created_at: 2.hours.ago, member: member, state: Order::WAIT, updated_at: Time.now + 10)
       create(:order_ask, :btcusd, price: '14'.to_d, volume: '123.12345678', created_at: 6.hours.ago, member: member, state: Order::DONE)
@@ -30,6 +31,17 @@ describe API::V2::Market::Orders, type: :request do
       api_get '/api/v2/market/orders', params: { market: 'usdusd' }, token: token
       expect(response).to have_http_status 422
       expect(response).to include_api_error('market.market.doesnt_exist')
+    end
+
+    it 'validates market param based on type' do
+      api_get '/api/v2/market/orders', params: { market: 'btcusd' }, token: token
+      expect(response).to have_http_status 200
+    end
+
+    it 'validates market_type param' do
+      api_get '/api/v2/market/orders', params: { market_type: 'invalid' }, token: token
+      expect(response.code).to eq '422'
+      expect(response).to include_api_error('market.market.invalid_market_type')
     end
 
     it 'validates state param' do
@@ -70,6 +82,22 @@ describe API::V2::Market::Orders, type: :request do
 
       expect(response).to be_successful
       expect(result.size).to eq 4
+    end
+
+    it 'returns all my orders for spot btceth market' do
+      api_get '/api/v2/market/orders', params: { market: 'btceth' }, token: token
+      result = JSON.parse(response.body)
+
+      expect(response).to be_successful
+      expect(result.size).to eq 1
+    end
+
+    it 'returns all my orders for qe btceth market' do
+      api_get '/api/v2/market/orders', params: { market: 'btceth', market_type: 'qe' }, token: token
+      result = JSON.parse(response.body)
+
+      expect(response).to be_successful
+      expect(result.size).to eq 1
     end
 
     it 'returns orders for several markets' do
@@ -205,15 +233,26 @@ describe API::V2::Market::Orders, type: :request do
   end
 
   describe 'GET /api/v2/market/orders/:id' do
-    let(:order)  { create(:order_bid, :btcusd, price: '12.32'.to_d, volume: '3.14', origin_volume: '12.13', member: member, trades_count: 1) }
+    let(:order) { create(:order_bid, :btcusd, price: '12.32'.to_d, volume: '3.14', origin_volume: '12.13', member: member, trades_count: 1) }
+    let(:qe_order) { create(:order_bid, :btceth_qe, price: '12.32'.to_d, volume: '3.14', origin_volume: '12.13', member: member, trades_count: 1) }
     let!(:trade) { create(:trade, :btcusd, taker_order: order) }
+    let!(:qe_trade) { create(:trade, :btceth_qe, taker_order: qe_order) }
 
-    it 'should get specified order by id' do
+    it 'should get specified spot order by id' do
       api_get "/api/v2/market/orders/#{order.id}", token: token
       expect(response).to be_successful
 
       result = JSON.parse(response.body)
       expect(result['id']).to eq order.id
+      expect(result['executed_volume']).to eq '8.99'
+    end
+
+    it 'should get specified qe order by id' do
+      api_get "/api/v2/market/orders/#{qe_order.id}", token: token
+      expect(response).to be_successful
+
+      result = JSON.parse(response.body)
+      expect(result['id']).to eq qe_order.id
       expect(result['executed_volume']).to eq '8.99'
     end
 
@@ -226,13 +265,23 @@ describe API::V2::Market::Orders, type: :request do
       expect(result['executed_volume']).to eq '8.99'
     end
 
-    it 'should include related trades' do
+    it 'should include related spot trades' do
       api_get "/api/v2/market/orders/#{order.id}", token: token
 
       result = JSON.parse(response.body)
       expect(result['trades_count']).to eq 1
       expect(result['trades'].size).to eq 1
       expect(result['trades'].first['id']).to eq trade.id
+      expect(result['trades'].first['side']).to eq 'buy'
+    end
+
+    it 'should include related qe trades' do
+      api_get "/api/v2/market/orders/#{qe_order.id}", token: token
+
+      result = JSON.parse(response.body)
+      expect(result['trades_count']).to eq 1
+      expect(result['trades'].size).to eq 1
+      expect(result['trades'].first['id']).to eq qe_trade.id
       expect(result['trades'].first['side']).to eq 'buy'
     end
 
@@ -269,6 +318,7 @@ describe API::V2::Market::Orders, type: :request do
         api_post '/api/v2/market/orders', token: token, params: { market: 'btcusd', side: 'sell', volume: '12.13', price: '2014' }
         expect(response).to be_successful
         expect(JSON.parse(response.body)['id']).to eq OrderAsk.last.id
+        expect(JSON.parse(response.body)['market_type']).to eq 'spot'
       end.to change(OrderAsk, :count).by(1)
     end
 
@@ -476,6 +526,7 @@ describe API::V2::Market::Orders, type: :request do
 
   describe 'POST /api/v2/market/orders/:id/cancel' do
     let!(:order) { create(:order_bid, :btcusd, price: '12.32'.to_d, volume: '3.14', origin_volume: '12.13', locked: '20.1082', origin_locked: '38.0882', member: member) }
+    let!(:qe_order) { create(:order_bid, :btceth_qe, price: '12.32'.to_d, volume: '3.14', origin_volume: '12.13', locked: '20.1082', origin_locked: '38.0882', member: member) }
 
     context 'succesful' do
       before do
@@ -523,6 +574,13 @@ describe API::V2::Market::Orders, type: :request do
     context 'failed' do
       it 'should return order not found error' do
         api_post '/api/v2/market/orders/0/cancel', token: token
+        expect(response.code).to eq '404'
+        expect(response).to include_api_error('record.not_found')
+      end
+
+
+      it 'should not cancel specified qe order by id' do
+        api_post "/api/v2/market/orders/#{qe_order.id}/cancel", token: token
         expect(response.code).to eq '404'
         expect(response).to include_api_error('record.not_found')
       end
